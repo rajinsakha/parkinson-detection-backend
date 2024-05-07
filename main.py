@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pickle
-import json
+import numpy as np
 
 app = FastAPI()
 
@@ -24,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class modelInput(BaseModel):
+class ModelInput(BaseModel):
     MDVP_Fo_Hz: float
     MDVP_Flo_Hz: float
     MDVP_Shimmer: float
@@ -37,22 +37,27 @@ class modelInput(BaseModel):
 
 # loading the saved model
 parkinsons_model = pickle.load(open('parkinsons_model.sav', 'rb'))
+scaler = pickle.load(open('scaler.sav', 'rb'))
 
 @app.post('/parkinsons_detection')
-def parkinsons_detection(input_parameters: modelInput):
-    mdvp_fo = input_parameters.MDVP_Fo_Hz
-    mdvp_flo = input_parameters.MDVP_Flo_Hz
-    mdvp_shimmer = input_parameters.MDVP_Shimmer
-    shimmer_apq5 = input_parameters.Shimmer_APQ5
-    mdvp_apq = input_parameters.MDVP_APQ
-    hnr = input_parameters.HNR
-    sp1 = input_parameters.spread1
-    sp2 = input_parameters.spread2
-    ppe = input_parameters.PPE
+def parkinsons_detection(input_parameters: ModelInput):
+    input_data = [
+        input_parameters.MDVP_Fo_Hz,
+        input_parameters.MDVP_Flo_Hz,
+        input_parameters.MDVP_Shimmer,
+        input_parameters.Shimmer_APQ5,
+        input_parameters.MDVP_APQ,
+        input_parameters.HNR,
+        input_parameters.spread1,
+        input_parameters.spread2,
+        input_parameters.PPE
+    ]
    
-    input_list = [mdvp_fo, mdvp_flo, mdvp_shimmer, shimmer_apq5, mdvp_apq, hnr, sp1, sp2, ppe]
+    input_data_array = np.asarray(input_data)
+    input_data_reshaped = input_data_array.reshape(1, -1)
+    std_data = scaler.transform(input_data_reshaped)
 
-    detection = parkinsons_model.predict([input_list])
+    detection = parkinsons_model.predict(std_data)
     
     if detection[0] == 0:
         return "The person doesn't have Parkinson's Disease"
